@@ -173,30 +173,30 @@ const DIFF_STYLE = { easy: { bg:"#d5f0dc", color:"#1e7a40", label:"Easy" }, med:
 
 // ── AI CHECKER ────────────────────────────────────────────
 async function checkWithAI(problem, studentAnswer) {
-  const system = `You are a calculus grader. Decide if the student's answer is mathematically equivalent to the correct answer.
+  if (!studentAnswer || !studentAnswer.trim()) {
+    return { correct: false, feedback: "Please enter an answer first.", hint: null };
+  }
+
+  const prompt = `You are a calculus grader. Decide if the student's answer is mathematically equivalent to the correct answer.
 Allow: different-but-equal forms, missing/present +C on indefinite integrals, different notation (arctan vs atan, sqrt(x) vs x^(1/2), ln|x| vs ln(x)).
-Respond ONLY with raw JSON, no markdown: {"correct":true/false,"feedback":"one sentence","hint":"short hint or null"}`;
+Respond ONLY with raw JSON, no markdown: {"correct":true/false,"feedback":"one sentence","hint":"short hint or null"}
 
-  const user = `Integral: ${problem.q}\nCorrect answer: ${problem.ans}\nStudent answer: ${studentAnswer}\nIs it correct?`;
+Integral: ${problem.q}
+Correct answer: ${problem.ans}
+Student answer: ${studentAnswer}
+Is it correct?`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/gemini", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": window.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 256,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt }),
   });
-  if (!res.ok) throw new Error(`API ${res.status}`);
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(JSON.stringify(err));
+  }
   const data = await res.json();
-  const text = data.content?.map(c => c.text || "").join("") || "";
+  const text = data.candidates[0].content.parts[0].text;
   return JSON.parse(text.replace(/```json|```/g, "").trim());
 }
 
