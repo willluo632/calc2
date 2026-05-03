@@ -171,135 +171,35 @@ const SECTION_KEYS = ["basic","usub","parts","trig","trigsub","partial","imprope
 const NAV_LABELS = { basic:"Basic Rules", usub:"u-Sub", parts:"By Parts", trig:"Trig Integrals", trigsub:"Trig Sub", partial:"Partial Fractions", improper:"Improper" };
 const DIFF_STYLE = { easy: { bg:"#d5f0dc", color:"#1e7a40", label:"Easy" }, med: { bg:"#fdebd0", color:"#b7571a", label:"Medium" }, hard: { bg:"#fadbd8", color:"#c0392b", label:"Hard" } };
 
-// ── LOCAL ANSWER CHECKER ──────────────────────────────────
-function normalise(s) {
-  return s
-    // lowercase
-    .toLowerCase()
-    // remove all whitespace
-    .replace(/\s+/g, "")
-    // remove +c / +C (optional constant)
-    .replace(/\+c$/i, "").replace(/\+c([^a-z]|$)/gi, "$1")
-    // standardise cdot/times to *
-    .replace(/\\cdot|\\times/g, "*")
-    // remove explicit multiplication sign before (
-    .replace(/\*(\()/g, "$1")
-    // \dfrac{a}{b} => (a)/(b)
-    .replace(/\\dfrac\{([^}]+)\}\{([^}]+)\}/g, "($1)/($2)")
-    // \frac{a}{b} => (a)/(b)
-    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1)/($2)")
-    // \tfrac{a}{b} => (a)/(b)
-    .replace(/\\tfrac\{([^}]+)\}\{([^}]+)\}/g, "($1)/($2)")
-    // \left( => (  \right) => )
-    .replace(/\\left\(/g, "(").replace(/\\right\)/g, ")")
-    .replace(/\\left\[/g, "[").replace(/\\right\]/g, "]")
-    // \ln => ln
-    .replace(/\\ln/g, "ln")
-    // \log => log
-    .replace(/\\log/g, "log")
-    // \sin \cos \tan etc => sin cos tan
-    .replace(/\\(sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)/g, "$1")
-    // atan => arctan
-    .replace(/\batan\b/g, "arctan")
-    // \sqrt{x} => sqrt(x)
-    .replace(/\\sqrt\{([^}]+)\}/g, "sqrt($1)")
-    // x^{n} => x^(n)
-    .replace(/\^\{([^}]+)\}/g, "^($1)")
-    // e^x variants: e^{x} e^(x) exp(x)
-    .replace(/\bexp\(([^)]+)\)/g, "e^($1)")
-    // \pi => pi
-    .replace(/\\pi/g, "pi")
-    // remove \\ (latex line breaks)
-    .replace(/\\\\/g, "")
-    // remove remaining single backslash latex commands
-    .replace(/\\[a-zA-Z]+/g, "")
-    // remove all remaining { }
-    .replace(/[{}]/g, "")
-    // collapse multiple signs: +- => -  -- => +
-    .replace(/\+-/g, "-").replace(/--/g, "+")
-    // remove leading +
-    .replace(/^\+/, "")
-    .trim();
+// ── AI CHECKER ────────────────────────────────────────────
+async function checkWithAI(problem, studentAnswer) {
+  const system = `You are a calculus grader. Decide if the student's answer is mathematically equivalent to the correct answer.
+Allow: different-but-equal forms, missing/present +C on indefinite integrals, different notation (arctan vs atan, sqrt(x) vs x^(1/2), ln|x| vs ln(x)).
+Respond ONLY with raw JSON, no markdown: {"correct":true/false,"feedback":"one sentence","hint":"short hint or null"}`;
+
+  const user = `Integral: ${problem.q}\nCorrect answer: ${problem.ans}\nStudent answer: ${studentAnswer}\nIs it correct?`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": window.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 256,
+      system,
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const data = await res.json();
+  const text = data.content?.map(c => c.text || "").join("") || "";
+  return JSON.parse(text.replace(/```json|```/g, "").trim());
 }
 
-// Generate common equivalent forms for an answer
-function variants(s) {
-  const n = normalise(s);
-  const vs = new Set([n]);
-
-  // with and without +c
-  vs.add(n.replace(/\+c$/i, ""));
-  vs.add(n + "+c");
-
-  // ln|x| <=> ln(x)  (absolute value often omitted)
-  vs.add(n.replace(/ln\|([^|]+)\|/g, "ln($1)"));
-  vs.add(n.replace(/ln\(([^)]+)\)/g, "ln|$1|"));
-
-  // -ln|cosx| <=> ln|secx|
-  if (n.includes("-ln") && n.includes("cos")) {
-    vs.add(n.replace(/-ln\|?cos([^|)]*)[|)]/g, "ln|sec$1|"));
-  }
-  if (n.includes("ln") && n.includes("sec")) {
-    vs.add(n.replace(/ln\|?sec([^|)]*)[|)]/g, "-ln|cos$1|"));
-  }
-
-  // arctan <=> atan
-  vs.add(n.replace(/arctan/g, "atan"));
-  vs.add(n.replace(/\batan\b/g, "arctan"));
-
-  // arcsin <=> asin
-  vs.add(n.replace(/arcsin/g, "asin"));
-  vs.add(n.replace(/\basin\b/g, "arcsin"));
-
-  // sqrt(x) <=> x^(1/2)
-  vs.add(n.replace(/sqrt\(([^)]+)\)/g, "($1)^(1/2)"));
-  vs.add(n.replace(/\(([^)]+)\)\^\(1\/2\)/g, "sqrt($1)"));
-
-  // reorder terms: a+b <=> b+a (simple two-term swap)
-  const plusParts = n.split("+");
-  if (plusParts.length === 2) {
-    vs.add(normalise(plusParts[1] + "+" + plusParts[0]));
-  }
-
-  return vs;
-}
-
-function checkAnswer(prob, studentAnswer) {
-  if (!studentAnswer.trim()) {
-    return { correct: false, feedback: "Please type an answer first.", hint: null };
-  }
-
-  const correct = prob.ans;
-  const sv = variants(studentAnswer);
-  const cv = variants(correct);
-
-  // Check if any student variant matches any correct variant
-  for (const s of sv) {
-    for (const c of cv) {
-      if (s === c) {
-        return { correct: true, feedback: "Great work — that matches the correct answer!", hint: null };
-      }
-    }
-  }
-
-  // Partial credit hints
-  const sn = normalise(studentAnswer);
-  const cn = normalise(correct);
-
-  // Check if only +C is missing
-  const sNoC = sn.replace(/\+c$/i, "");
-  const cNoC = cn.replace(/\+c$/i, "");
-  if (sNoC === cNoC) {
-    return { correct: true, feedback: "Correct! (Remember to include +C for indefinite integrals.)", hint: null };
-  }
-
-  // Check if they have +C but the rest is wrong
-  const hint = cn.length > 0
-    ? "Check your work — compare against the solution steps below."
-    : null;
-
-  return { correct: false, feedback: "Not quite. Try again or check the solution.", hint };
-}
 // ── PROBLEM CARD ──────────────────────────────────────────
 function ProblemCard({ prob, idx, sectionKey, onScore }) {
   const [input, setInput] = useState("");
@@ -317,11 +217,16 @@ function ProblemCard({ prob, idx, sectionKey, onScore }) {
     } catch { setPreview(null); }
   };
 
-  const handleCheck = () => {
-    if (!input.trim()) return;
-    const result = checkAnswer(prob, input.trim());
-    setFeedback(result);
-    onScore(sectionKey, idx, result.correct ? "got" : "not");
+  const handleCheck = async () => {
+    if (!input.trim() || feedback === "loading") return;
+    setFeedback("loading");
+    try {
+      const result = await checkWithAI(prob, input.trim());
+      setFeedback(result);
+      onScore(sectionKey, idx, result.correct ? "got" : "not");
+    } catch (e) {
+      setFeedback({ error: e.message });
+    }
   };
 
   const d = DIFF_STYLE[prob.diff];
@@ -349,7 +254,7 @@ function ProblemCard({ prob, idx, sectionKey, onScore }) {
             onChange={e => handleInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleCheck()}
             placeholder="Type your answer, e.g.  (1/2)e^(x^2) + C"
-            disabled={false}
+            disabled={feedback === "loading"}
             style={{
               flex:1, border:`1.5px solid ${feedback?.correct===true?"#1e8449":feedback?.correct===false?"#c0392b":"#c8bfaa"}`,
               borderRadius:7, padding:".55rem .85rem", fontFamily:"monospace", fontSize:".86rem",
@@ -359,15 +264,15 @@ function ProblemCard({ prob, idx, sectionKey, onScore }) {
           />
           <button
             onClick={handleCheck}
-            disabled={!input.trim()}
+            disabled={feedback === "loading" || !input.trim()}
             style={{
               background:"#0f0e0c", color:"#f5f1e8", border:"none", borderRadius:7,
               padding:".55rem 1.1rem", fontFamily:"monospace", fontSize:".75rem",
               letterSpacing:".08em", textTransform:"uppercase", cursor:"pointer",
-              opacity: !input.trim() ? .5 : 1
+              opacity: (feedback==="loading"||!input.trim()) ? .5 : 1
             }}
           >
-            "Check"
+            {feedback === "loading" ? "…" : "Check"}
           </button>
         </div>
 
@@ -380,7 +285,7 @@ function ProblemCard({ prob, idx, sectionKey, onScore }) {
         )}
 
         {/* Feedback */}
-        {feedback && (
+        {feedback && feedback !== "loading" && (
           <div style={{
             marginTop:".5rem", display:"flex", alignItems:"flex-start", gap:".6rem",
             padding:".65rem .9rem", borderRadius:7, fontSize:".86rem", lineHeight:1.5,
@@ -447,7 +352,7 @@ function Section({ sectionKey, data, scores, onScore }) {
       <div style={{ display:"flex", gap:"1.25rem", marginBottom:"1.75rem", paddingBottom:"1.25rem", borderBottom:"1.5px solid #c8bfaa" }}>
         <div style={{ fontSize:"2rem", lineHeight:1 }}>{data.icon}</div>
         <div>
-          <h2 style={{ fontFamily:"Georgia,serif", fontSize:"1.9rem", color: "#7a7061", letterSpacing:"-.02em", lineHeight:1.1 }}>{data.title}</h2>
+          <h2 style={{ fontFamily:"Georgia,serif", fontSize:"1.9rem", letterSpacing:"-.02em", lineHeight:1.1 }}>{data.title}</h2>
           <p style={{ fontSize:".9rem", color:"#7a7060", marginTop:".4rem" }}>{data.desc}</p>
         </div>
       </div>
@@ -497,7 +402,7 @@ function Reference() {
       <div style={{ display:"flex", gap:"1.25rem", marginBottom:"1.75rem", paddingBottom:"1.25rem", borderBottom:"1.5px solid #c8bfaa" }}>
         <div style={{ fontSize:"2rem" }}>📋</div>
         <div>
-          <h2 style={{ fontFamily:"Georgia,serif", fontSize:"1.9rem", color:"#7a7060" }}>Quick Reference Sheet</h2>
+          <h2 style={{ fontFamily:"Georgia,serif", fontSize:"1.9rem" }}>Quick Reference Sheet</h2>
           <p style={{ fontSize:".9rem", color:"#7a7060", marginTop:".4rem" }}>All formulas for the BC exam in one place.</p>
         </div>
       </div>
@@ -546,6 +451,7 @@ export default function App() {
           Practice <span style={{ color:"#c0392b" }}>Integrals</span>
         </h1>
         <p style={{ fontSize:".9rem", color:"#c8bfaa", marginTop:".5rem", fontWeight:300 }}>
+          Type your answer and get instant AI feedback.
         </p>
       </div>
 
@@ -583,6 +489,4 @@ export default function App() {
       </div>
     </div>
   );
-}
-
 }
