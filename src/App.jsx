@@ -352,7 +352,7 @@ function Section({ sectionKey, data, scores, onScore }) {
       <div style={{ display:"flex", gap:"1.25rem", marginBottom:"1.75rem", paddingBottom:"1.25rem", borderBottom:"1.5px solid #c8bfaa" }}>
         <div style={{ fontSize:"2rem", lineHeight:1 }}>{data.icon}</div>
         <div>
-          <h2 style={{ fontFamily:"Georgia,serif", fontSize:"1.9rem", letterSpacing:"-.02em", lineHeight:1.1 }}>{data.title}</h2>
+          <h2 style={{ fontFamily:"Georgia,serif", fontSize:"1.9rem",color:"#7a7060", letterSpacing:"-.02em", lineHeight:1.1 }}>{data.title}</h2>
           <p style={{ fontSize:".9rem", color:"#7a7060", marginTop:".4rem" }}>{data.desc}</p>
         </div>
       </div>
@@ -389,7 +389,7 @@ const REF = [
   { title:"Power & Log", items:["\\int x^n\\,dx = \\tfrac{x^{n+1}}{n+1}+C","\\int \\tfrac{1}{x}\\,dx = \\ln|x|+C","\\int e^x\\,dx = e^x+C","\\int a^x\\,dx = \\tfrac{a^x}{\\ln a}+C","\\int \\ln x\\,dx = x\\ln x-x+C"] },
   { title:"Basic Trig", items:["\\int \\sin x\\,dx = -\\cos x+C","\\int \\cos x\\,dx = \\sin x+C","\\int \\sec^2 x\\,dx = \\tan x+C","\\int \\sec x\\tan x\\,dx = \\sec x+C","\\int \\sec x\\,dx = \\ln|\\sec x+\\tan x|+C","\\int \\tan x\\,dx = \\ln|\\sec x|+C"] },
   { title:"Inverse Trig", items:["\\int \\tfrac{1}{\\sqrt{1-x^2}}\\,dx = \\arcsin x+C","\\int \\tfrac{1}{1+x^2}\\,dx = \\arctan x+C"] },
-  { title:"By Parts", items:["\\int u\\,dv = uv-\\int v\\,du","\\text{LIATE: Log · Inv-trig · Alg · Trig · Exp}"] },
+  { title:"By Parts", items:["\\int u\\,dv = uv-\\int v\\,du","\\text{LIATE: Log Inv-trig Alg Trig Exp}"] },
   { title:"Trig Identities", items:["\\sin^2 x = \\tfrac{1-\\cos 2x}{2}","\\cos^2 x = \\tfrac{1+\\cos 2x}{2}","\\sin 2x = 2\\sin x\\cos x","\\tan^2 x = \\sec^2 x-1"] },
   { title:"Trig Sub", items:["\\sqrt{a^2-x^2}\\Rightarrow x=a\\sin\\theta","\\sqrt{a^2+x^2}\\Rightarrow x=a\\tan\\theta","\\sqrt{x^2-a^2}\\Rightarrow x=a\\sec\\theta"] },
   { title:"Partial Fractions", items:["\\tfrac{P}{(x-a)(x-b)}=\\tfrac{A}{x-a}+\\tfrac{B}{x-b}","\\tfrac{P}{(x-a)^2}=\\tfrac{A}{x-a}+\\tfrac{B}{(x-a)^2}"] },
@@ -402,7 +402,7 @@ function Reference() {
       <div style={{ display:"flex", gap:"1.25rem", marginBottom:"1.75rem", paddingBottom:"1.25rem", borderBottom:"1.5px solid #c8bfaa" }}>
         <div style={{ fontSize:"2rem" }}>📋</div>
         <div>
-          <h2 style={{ fontFamily:"Georgia,serif", fontSize:"1.9rem" }}>Quick Reference Sheet</h2>
+          <h2 style={{ fontFamily:"Georgia,serif", fontSize:"1.9rem", color:"#7a7060"}}>Quick Reference Sheet</h2>
           <p style={{ fontSize:".9rem", color:"#7a7060", marginTop:".4rem" }}>All formulas for the BC exam in one place.</p>
         </div>
       </div>
